@@ -17,7 +17,6 @@ function showConfiguredSections(sections) {
 function createLookupOptions(selectEl, label, items) {
   if (!selectEl) return;
   selectEl.innerHTML = "";
-
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = `Select ${label}`;
@@ -31,48 +30,24 @@ function createLookupOptions(selectEl, label, items) {
   });
 }
 
-function flattenEntities(sections) {
+function buildTreeData(sections) {
   const entityMap = new Map();
 
   sections.forEach((section) => {
-    (section.entities || []).forEach((entity) => {
+    section.entities.forEach((entity) => {
       if (!entityMap.has(entity.id)) {
-        entityMap.set(entity.id, {
-          ...entity,
-          fields: [...(entity.fields || [])],
-        });
-        return;
+        entityMap.set(entity.id, entity);
       }
-
-      const existing = entityMap.get(entity.id);
-      const seenFieldKeys = new Set(existing.fields.map((field) => field.key));
-      (entity.fields || []).forEach((field) => {
-        if (!seenFieldKeys.has(field.key)) {
-          existing.fields.push(field);
-          seenFieldKeys.add(field.key);
-        }
-      });
     });
   });
 
-  return Array.from(entityMap.values()).sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function buildTreeData(sections) {
-  const entities = flattenEntities(sections);
-
-  return entities.map((entity) => ({
+  return Array.from(entityMap.values()).map((entity) => ({
     text: entity.name,
-    type: "entity",
     state: { opened: false },
-    children: entity.fields
-      .slice()
-      .sort((a, b) => a.display_name.localeCompare(b.display_name))
-      .map((field) => ({
-        text: `<span class=\"field-item\" data-entity=\"${entity.name}\" data-field=\"${field.key}\" data-display-name=\"${field.display_name}\" data-datatype=\"${field.datatype || "unknown"}\" data-is-measure=\"${field.is_measure ? "1" : "0"}\">${field.display_name}</span>`,
-        type: "field",
-        icon: "fa-regular fa-square-check text-slate-500",
-      })),
+    children: entity.fields.map((field) => ({
+      text: `<span class=\"field-item\" data-entity=\"${entity.name}\" data-field=\"${field.key}\">${field.display_name}</span>`,
+      icon: false,
+    })),
   }));
 }
 
@@ -82,18 +57,15 @@ function togglePlaceholder(zone) {
   placeholder.classList.toggle("hidden", zone.querySelectorAll(".field-tag").length > 0);
 }
 
-function makeTag(payload) {
+function makeTag(label) {
   const tag = document.createElement("span");
   tag.className = "field-tag";
-  tag.title = `Display: ${payload.displayName}\nDatatype: ${payload.datatype}\nMeasure: ${payload.isMeasure ? "Yes" : "No"}`;
-  tag.innerHTML = `[${payload.entity}.${payload.field}]<button type=\"button\" class=\"remove-tag\" aria-label=\"remove\">×</button>`;
-
+  tag.innerHTML = `${label}<button type=\"button\" class=\"remove-tag\" aria-label=\"remove\">×</button>`;
   tag.querySelector(".remove-tag").addEventListener("click", () => {
     const zone = tag.closest(".drop-zone");
     tag.remove();
     if (zone) togglePlaceholder(zone);
   });
-
   return tag;
 }
 
@@ -105,18 +77,11 @@ function initDropZones() {
       onAdd: (evt) => {
         const dropped = evt.item;
         if (!dropped.classList.contains("field-tag")) {
-          const payload = {
-            entity: dropped.dataset.entity,
-            field: dropped.dataset.field,
-            displayName: dropped.dataset.displayName,
-            datatype: dropped.dataset.datatype,
-            isMeasure: dropped.dataset.isMeasure === "1",
-          };
-
+          const entity = dropped.dataset.entity;
+          const field = dropped.dataset.field;
           dropped.remove();
-
-          if (payload.entity && payload.field) {
-            zone.appendChild(makeTag(payload));
+          if (entity && field) {
+            zone.appendChild(makeTag(`[${entity}.${field}]`));
           }
         }
         togglePlaceholder(zone);
@@ -127,8 +92,7 @@ function initDropZones() {
 }
 
 function initTreeDrag() {
-  const treeContainer = document.getElementById("schema-tree");
-  Sortable.create(treeContainer, {
+  Sortable.create(document.getElementById("schema-tree"), {
     group: { name: "report-builder", pull: "clone", put: false },
     sort: false,
     draggable: ".field-item",
@@ -163,15 +127,9 @@ async function init() {
         initTreeDrag();
       })
       .jstree({
-        plugins: ["types", "wholerow"],
         core: {
           data: buildTreeData(sections),
           check_callback: true,
-          themes: { dots: false },
-        },
-        types: {
-          entity: { icon: "fa-solid fa-table-list text-slate-600" },
-          field: { icon: "fa-regular fa-square-check text-slate-500" },
         },
       });
 
