@@ -15,6 +15,7 @@ class EntityItem(BaseModel):
     key: str
     name: str
     fields: List[FieldItem]
+    metrics: dict[str, List[FieldItem]] = {}
 
 
 class SectionItem(BaseModel):
