@@ -4,10 +4,16 @@ from pydantic import BaseModel
 
 
 class FieldItem(BaseModel):
-    key: str
-    display_name: str
-    datatype: str
-    is_measure: bool
+    id: int
+    entityId: int
+    fieldKey: str
+    displayName: str
+    dataType: str
+    isFilterable: bool
+    isGroupable: bool
+    isSortable: bool
+    isAggregatable: bool
+    isMeasure: bool
 
 
 class EntityItem(BaseModel):
@@ -15,7 +21,6 @@ class EntityItem(BaseModel):
     key: str
     name: str
     fields: List[FieldItem]
-    metrics: dict[str, List[FieldItem]] = {}
 
 
 class SectionItem(BaseModel):

@@ -43,32 +43,19 @@ def load_schema() -> dict:
     fields_sql = text(
         """
         SELECT
+            RF.RF_Id,
             RF.RF_EntityId,
             RF.RF_FieldKey,
             RF.RF_DisplayName,
             RF.RF_DataType,
+            ISNULL(RF.RF_IsFilterable, 0) AS RF_IsFilterable,
+            ISNULL(RF.RF_IsGroupable, 0) AS RF_IsGroupable,
+            ISNULL(RF.RF_IsSortable, 0) AS RF_IsSortable,
+            ISNULL(RF.RF_IsAggregatable, 0) AS RF_IsAggregatable,
             ISNULL(RF.RF_IsMeasure, 0) AS RF_IsMeasure
         FROM ReportingFields RF
         WHERE ISNULL(RF.RF_IsActive, 1) = 1
         ORDER BY RF.RF_EntityId, RF.RF_DisplayName
-        """
-    )
-    
-    metrics_sql = text(
-        """
-        SELECT 
-            Fn.RFn_FunctionName, 
-            RF.RF_EntityId,
-            RF.RF_FieldKey,
-            RF.RF_DisplayName,
-            RF.RF_DataType,
-            ISNULL(RF.RF_IsMeasure, 0) AS RF_IsMeasure
-        FROM ReportingFieldFunctions RFF
-        JOIN ReportingFunctions Fn ON Fn.RFn_Id = RFF.RFF_FunctionId
-        JOIN ReportingFields RF ON RF.RF_Id = RFF.RFF_FieldId
-        WHERE ISNULL(RF.RF_IsActive, 1) = 1 
-          AND ISNULL(Fn.RFn_IsActive, 1) = 1
-        ORDER BY Fn.RFn_FunctionName, RF.RF_DisplayName
         """
     )
 
@@ -77,13 +64,6 @@ def load_schema() -> dict:
             section_rows = connection.execute(sections_sql).mappings().all()
             entity_rows = connection.execute(entities_sql).mappings().all()
             field_rows = connection.execute(fields_sql).mappings().all()
-            
-            try:
-                metric_rows = connection.execute(metrics_sql).mappings().all()
-            except SQLAlchemyError:
-                # If these tables don't exist yet or format is different, safely fallback to no metrics
-                metric_rows = []
-                
     except SQLAlchemyError as exc:
         raise SchemaLoadError(f"Unable to load reporting metadata: {exc}") from exc
 
@@ -91,23 +71,16 @@ def load_schema() -> dict:
     for row in field_rows:
         fields_by_entity[int(row["RF_EntityId"])].append(
             {
-                "key": row["RF_FieldKey"],
-                "display_name": row["RF_DisplayName"],
-                "datatype": row["RF_DataType"] or "unknown",
-                "is_measure": bool(row["RF_IsMeasure"]),
-            }
-        )
-
-    metrics_by_entity: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
-    for row in metric_rows:
-        entity_id = int(row["RF_EntityId"])
-        func_name = row["RFn_FunctionName"]
-        metrics_by_entity[entity_id][func_name].append(
-            {
-                "key": row["RF_FieldKey"],
-                "display_name": row["RF_DisplayName"],
-                "datatype": row["RF_DataType"] or "unknown",
-                "is_measure": bool(row["RF_IsMeasure"]),
+                "id": int(row["RF_Id"]),
+                "entityId": int(row["RF_EntityId"]),
+                "fieldKey": row["RF_FieldKey"],
+                "displayName": row["RF_DisplayName"],
+                "dataType": row["RF_DataType"] or "unknown",
+                "isFilterable": bool(row["RF_IsFilterable"]),
+                "isGroupable": bool(row["RF_IsGroupable"]),
+                "isSortable": bool(row["RF_IsSortable"]),
+                "isAggregatable": bool(row["RF_IsAggregatable"]),
+                "isMeasure": bool(row["RF_IsMeasure"]),
             }
         )
 
@@ -119,8 +92,7 @@ def load_schema() -> dict:
                 "id": entity_id,
                 "key": row["RE_EntityKey"],
                 "name": row["RE_DisplayName"],
-                "fields": fields_by_entity.get(entity_id, []),
-                "metrics": metrics_by_entity.get(entity_id, {}),
+                "fields": fields_by_entity.get(entity_id, [])
             }
         )
 
